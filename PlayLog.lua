@@ -28,6 +28,7 @@ Usage
   - system.getSensors ()
   - system.getSensorByID (sensor ID, sensor param)
   - system.getSensorValueByID (sensor ID, sensor param)
+  - system.getInputs (Input1,...)
   - system.getInputsVal (Input1,...)
   - system.getTxTelemetry ()
 
@@ -48,15 +49,26 @@ Licence:
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ]]
+-- Todos / open topics / function limits
+-- Requiers JETI SW Version 4.28 or higer
 -- after first start or file change: type and decimal might not initialisied so time, date, gps are wrong 
 -- system.getTxTelemetry () : supports only receiver 1
 -- ??? system.getSensors no check if log file and emulator provide the same sensors
 -- only the first error message per block is stored
 --
--- How to handle user log labels?
--- the same as standart control inputs: control name follows first blank
 -- see '??? mark1'ware is provided as it is without any laibility or any warranty
-
+-- the direct tx control values have a reduced resolution
+-- system.getInputsVal: works only limited because getSwitchInfo properties are not complete 
+--  and the switchItem configuration is not part of the log file
+-- 
+--[[
+ version 0.44 initial release
+		 0.45 
+		- decimal correction for return values
+		- TX log parameter values labes must equal the switch or switchItem label
+		- TX log parameter <50 treated special: expect 0 to 100% output will be -1 to 1
+		- system.getInputsVal added, but limited function due to system.getSwitchInfo limits
+]]
 local appName="PlayLog"
 
 local logPath="Log/"
@@ -64,6 +76,7 @@ local logFile="default.log"
 
 local system_getTxTelemetry=system.getTxTelemetry
 local system_getInputs=system.getInputs
+local system_getInputsVal=system.getInputsVal
 local system_getSensors=system.getSensors
 local system_getSensorByID=system.getSensorByID
 local system_getSensorValueByID=system.getSensorValueByID
@@ -97,6 +110,22 @@ local line			-- log file line
 local sPos			-- sub-string start position 
 local ePos			-- sub-string end position
 
+
+--------------------------------------------------------------------
+-- helper function
+local function getDivisor(i,p)
+  local divisor=1.0
+  if not pcall(function()
+    local d=0
+    while d< sensors[i][p]["decimals"] do
+      divisor=divisor*10.0
+      d=d+1
+    end
+  end) then
+    divisor=1.0
+  end
+  return divisor
+end
 --------------------------------------------------------------------
 -- telemetrie wreper function
 --------------------------------------------------------------------
@@ -110,13 +139,13 @@ system.getTxTelemetry=function(...)
       if rx["RxId"] then
         for param in pairs(sensors[rx["RxId"]]) do
           if sensors[rx["RxId"]][param]["label"] == "U Rx" then
-            txTel.rx1Voltage=sensors[rx["RxId"]][param]["value"]
+            txTel.rx1Voltage=sensors[rx["RxId"]][param]["value"]/getDivisor(rx["RxId"],param)
           elseif sensors[rx["RxId"]][param]["label"] == "Q" then
-            txTel.rx1Percent=sensors[rx["RxId"]][param]["value"]
+            txTel.rx1Percent=sensors[rx["RxId"]][param]["value"]/getDivisor(rx["RxId"],param)
           elseif sensors[rx["RxId"]][param]["label"] == "A1" then
-            txTel.RSSI[1]=sensors[rx["RxId"]][param]["value"]
+            txTel.RSSI[1]=sensors[rx["RxId"]][param]["value"]/getDivisor(rx["RxId"],param)
           elseif sensors[rx["RxId"]][param]["label"] == "A2" then
-            txTel.RSSI[2]=sensors[rx["RxId"]][param]["value"]
+            txTel.RSSI[2]=sensors[rx["RxId"]][param]["value"]/getDivisor(rx["RxId"],param)
           end
         end
       end
@@ -144,7 +173,11 @@ system.getInputs=function(...)
     if not pcall(function()
       for i,input in pairs(arg) do					-- replace original with log file data
         if tx[input] then
-          r[i]=sensors[tx["TxId"]][tx[input]]["value"]
+		  if tx[input] >50 then						-- handel value as "normal" sensor value
+            r[i]=sensors[tx["TxId"]][tx[input]]["value"]/getDivisor(tx["TxId"],tx[input])
+		  else
+            r[i]=(sensors[tx["TxId"]][tx[input]]["value"] -50)/50	-- log is 0-100 system -1 to 0 to 1
+		  end
         end
       end
     end ) then
@@ -153,6 +186,39 @@ system.getInputs=function(...)
         errorList["getInputs"]["etime"]=logTime
         errorList["getInputs"]["etype"]="getInputs"
         errorList["getInputs"]["evalue"]="unkown value"
+      end
+    end
+  end
+  return r[1],r[2],r[3],r[4],r[5],r[6],r[7],r[8]
+end
+
+--------------------------------------------------------------------
+-- system.getInputsVal
+--------------------------------------------------------------------
+system.getInputsVal=function(...)
+  local r={}
+  local arg = {...}
+  r[1],r[2],r[3],r[4],r[5],r[6],r[7],r[8]=system_getInputsVal(...)
+  if tx then
+    if not pcall(function()
+      for i,input in pairs(arg) do					-- replace original with log file data
+        local swItemTab=system.getSwitchInfo(input)
+        if tx[swItemTab.label] then
+		  if tx[swItemTab.label] >50 then			-- handel value as "normal" sensor value
+            r[i]=sensors[tx["TxId"]][tx[swItemTab.label]]["value"]/getDivisor(tx["TxId"],tx[swItemTab.label])
+		  else
+            r[i]=(sensors[tx["TxId"]][tx[swItemTab.label]]["value"] -50)/50	-- log is 0-100 system -1 to 0 to 1
+		  end
+-- later convert value to the requeste properties from swItemTab=getSwitchInfo(input) :center, proportional, reverse
+-- assuming the UNIT feld in the log file will contain the logded configuration default: log is always proportional
+        end
+      end
+    end ) then
+      if errorList["getInputsVal"]==nil then
+        errorList["getInputsVal"]={}
+        errorList["getInputsVal"]["etime"]=logTime
+        errorList["getInputsVal"]["etype"]="getInputsVal"
+        errorList["getInputsVal"]["evalue"]="unkown value"
       end
     end
   end
@@ -215,12 +281,7 @@ local function doParameter(fullData,id,param)
     elseif s["type"]==9 then								-- gps
       s["valGPS"]= sensors[id][param]["value"]
     else
-	  local divisor=1.0
-	  local d=0
-      while d< sensors[id][param]["decimals"] do
-        divisor=divisor*10.0
-		d=d+1
-      end
+	  local divisor=getDivisor(id,param)
       s["value"]=sensors[id][param]["value"] /divisor		-- float
 	  if sensors[id][param]["min"] then
 		s["min"]=sensors[id][param]["min"]   /divisor
@@ -289,6 +350,7 @@ system.getSensorByID=function(...)
     if i==1 then id=v end
     if i==2 then param=tonumber(v) end
   end
+
   return doParameter(true,id,param)
 end
 
@@ -409,25 +471,16 @@ local function logPlayer()
 	  for param,senPar in pairs(sensors[tx["TxId"]]) do
         if param~=0 then					-- not for label
 		  if param>50 then					-- user Logger?
--- ??? mark1 How to handle user log lables? 
--- might be changed or extended later
-			local pos = senPar["label"]:find(" ",1)
-			if pos then
-              local sw=senPar["label"]:sub(pos+1)
-	          if sw then
-			    if tx[sw] or sw=="TxId" then
-                  if errorList["InputControl"]==nil then
-		            errorList["InputControl"]={}
-		            errorList["InputControl"]["etime"]="0;"..tx["TxId"]..';'..param
-		            errorList["InputControl"]["etype"]="redefinition Input Control"
-		            errorList["InputControl"]["evalue"]=sw
-		          end
-				else
-	              tx[sw]=param
-				end
-			  end
+		    if tx[senPar["label"]] or senPar["label"]=="TxId" then
+              if errorList["InputControl"]==nil then
+	            errorList["InputControl"]={}
+	            errorList["InputControl"]["etime"]="0;"..tx["TxId"]..';'..param
+	            errorList["InputControl"]["etype"]="redefinition Input Control"
+	            errorList["InputControl"]["evalue"]=senPar["label"]
+	          end
+			else
+              tx[senPar["label"]]=param
 			end
--- ??? mark1 end
 		  else								-- tx input control
 			local pos = senPar["label"]:find(" ",1)
 			if pos then
@@ -664,4 +717,4 @@ local function init(code)
   end
 end
 
-return { init=init, loop=loop, author="Andre", version="0.44",name=appName}
+return { init=init, loop=loop, author="Andre", version="0.45",name=appName}
