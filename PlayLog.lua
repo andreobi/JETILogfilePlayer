@@ -11,9 +11,9 @@ The application should never be used on a real device to to avoid any unpredicta
 Description
 
 The application is a development tool to test lua applications with previous recorded log file data.
-A free selectable switch can control the player. The control switch should not be contained in the log file data.
+A free selectable switch can control the player. The control switch is always taken from the emulator.
 The player has four states: 
- - not initialiesed
+ - initialiesed
  - reset/stopped
  - playing
  - finished
@@ -211,6 +211,15 @@ system.getInputsVal=function(...)
 		  end
 -- later convert value to the requeste properties from swItemTab=getSwitchInfo(input) :center, proportional, reverse
 -- assuming the UNIT feld in the log file will contain the logded configuration default: log is always proportional
+-- default could look somthing like that or check if something else is definfed in the "UNIT"
+--		  if not swItemTab.proportional then
+--		    if r[i] > 0.7 then r[i] =1
+--			elseif  r[i] < -0.7 then r[i] =-1
+--			else r[i]=0
+--        else
+-- 		    if not swItemTab.center then r[i]=(r[i]+1)/2 end
+--		  end
+--		  if swItemTab.reverse then r[i]=-1*r[i] end
         end
       end
     end ) then
@@ -652,7 +661,7 @@ end
 --------------------------------------------------------------------
 local function loop()
   if swReset then							-- handling & log file defined?
-    local valReset = system.getInputsVal(swReset)
+    local valReset = system_getInputsVal(swReset)
     if valReset>0 then						-- Restart log file?
       if lpRun then
 	    lpRun=false
@@ -717,4 +726,4 @@ local function init(code)
   end
 end
 
-return { init=init, loop=loop, author="Andre", version="0.45",name=appName}
+return { init=init, loop=loop, author="Andre", version="0.46",name=appName}
