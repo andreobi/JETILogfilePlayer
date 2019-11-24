@@ -68,8 +68,16 @@ Licence:
 		- TX log parameter values labes must equal the switch or switchItem label
 		- TX log parameter <50 treated special: expect 0 to 100% output will be -1 to 1
 		- system.getInputsVal added, but limited function due to system.getSwitchInfo limits
+		0.46
+		- control switch is always taken from the emulator
+		0.47
+		- sensor.label staus "valid" is now treated like the other values
+		- the log file can now contain comment lines after the first logtime >0 line
+		- a comment line has to start with non number character
+		- display name changed
+		- init simplified
 ]]
-local appName="PlayLog"
+local appName="Log File Player"
 
 local logPath="Log/"
 local logFile="default.log"
@@ -359,7 +367,6 @@ system.getSensorByID=function(...)
     if i==1 then id=v end
     if i==2 then param=tonumber(v) end
   end
-
   return doParameter(true,id,param)
 end
 
@@ -441,6 +448,17 @@ local function logPlayer()
       else
         ePos=0								-- new line
         logTime=tonumber(findPos())
+		if logTime==nil then
+          io.close(file)
+          file=nil
+          if errorList["playerInit"]==nil then
+	        errorList["playerInit"]={}
+	        errorList["playerInit"]["etime"]=0
+	        errorList["playerInit"]["etype"]="File no logtime"
+            errorList["playerInit"]["evalue"]=logPath..logFile
+          end
+	      return								-- eof and now?
+		end
         sid=(findPos())
         if logTime==0 then					-- sensor def
           sparam=tonumber(findPos())
@@ -545,7 +563,10 @@ local function logPlayer()
 		    end
             break
           else														-- store parameter set
-            sensors[sid][sparam]["logTime"]	= logTime				-- time
+            sensors[sid][sparam]["logTime"] = logTime				-- time
+            if sensors[sid][0]~=nil then
+              sensors[sid][0]["logTime"] = logTime					-- sensorname also has a "valid" time
+	        end
             sensors[sid][sparam]["type"]	= tonumber(findPos())	-- type
             sensors[sid][sparam]["decimals"]= tonumber(findPos())	-- decimals
             sensors[sid][sparam]["value"]	= tonumber(findPos())	-- value
@@ -565,16 +586,18 @@ local function logPlayer()
           end
         end									--eol - next
       end
-      line = io.readline(file)
-      if line==nil then
-        io.close(file)
-        file=nil
-	    return								-- eof - done
-      end
-      ePos=0
-      logTime= tonumber(findPos())
-      sid=(findPos())
-    end										--eotime - return
+      repeat
+        line = io.readline(file)
+        if line==nil then
+          io.close(file)
+          file=nil
+	      return							-- eof - done
+        end
+        ePos=0
+        logTime= tonumber(findPos())
+        sid=(findPos())
+	  until logTime~=nil 					-- jump over empty lines or comment lines starting with --
+    end										-- eotime - return
   elseif lpEnd then							-- finished
 	if file then							-- close file if not already done
 	  io.close(file)
@@ -660,7 +683,7 @@ end
 -- Runtime functions
 --------------------------------------------------------------------
 local function loop()
-  if swReset then							-- handling & log file defined?
+  if swReset~=nil then							-- handling & log file defined?
     local valReset = system_getInputsVal(swReset)
     if valReset>0 then						-- Restart log file?
       if lpRun then
@@ -713,17 +736,9 @@ local function init(code)
 	errorList={}								-- reset Error list
 	systemStartTime=0							-- set player time
 	logStartTime=0
-
-    if swReset and logFile then					-- try to start
-      lpReset=true
-      logPlayer()
-	  printStatus("LP: initillised")
-    else
-	  printStatus("LP: stopped")
-    end
   else
     print ("Emulator usage ONLY!!!")
   end
 end
 
-return { init=init, loop=loop, author="Andre", version="0.46",name=appName}
+return { init=init, loop=loop, author="Andre", version="0.47",name=appName}
