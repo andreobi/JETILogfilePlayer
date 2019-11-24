@@ -11,13 +11,15 @@ The application should never be used on a real device to to avoid any unpredicta
 Description
 
 The application is a development tool to test lua applications with previous recorded log file data.
-A free selectable switch can control the player. The control switch should not be contained in the log file data.
+Instead of using a real logfile you can build your own test case file to simulate your test-app.
+A free selectable switch can control the player. The control switch is always taken from the emulator.
 The player has four states: 
- - not initialiesed
+ - initialiesed
  - reset/stopped
  - playing
  - finished
 User feedback is given in the emulator debug window.
+
 
 Usage
 
@@ -28,5 +30,17 @@ Usage
   - system.getSensors ()
   - system.getSensorByID (sensor ID, sensor param)
   - system.getSensorValueByID (sensor ID, sensor param)
-  - system.getInputsVal (Input1,...)
+  - system.getInputsVal (Input1,...) - limited functionality!
+  - system.getInputs (...)
   - system.getTxTelemetry ()
+
+Demo
+Install the default.log file in the emulator ../Log dir.
+Istall the LPTest.lua in the ../App folder
+Start the Player with the control switch
+When everything went well you should see:
+LP: Test Sensor
+LP: initillised
+LP: playing
+signal A = 1.016  (min: 0.015, max: 1.016)
+...
