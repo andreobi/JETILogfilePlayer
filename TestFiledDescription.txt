@@ -1,0 +1,73 @@
+-- first line starting with # followed by <model name> 
+# Test Sensor
+
+all defintion values are separated by a ;
+spaces are not allowed - at least not for the Logfile Player
+
+Sensor or Input definition part, starts always with 000000000
+;
+next ist the sensor or input= device ID 1234567890
+;
+a device can have more than 1 measured Parameter 0,1,2...
+can have gaps 0,1,5,7,15 is okay
+Parameter:0 is the Label of the device no further data in the data field
+;
+Label, can contain blanks which are part of a sensor name
+OR
+Input, like specified in the JETI API
+exception device is TX and Parameter 0-50: 
+- every thing infront of the first blnk is ignored 
+- but the blank is required
+- <Geber > ignored, input label is <P1> 
+exception device is TX and Parameter >50: 
+- input label is taken directly look at P4
+;
+Unit, optional, max 4 character
+
+000000000;1234567890;0;Tx; 
+000000000;1234567890;1;Geber P1; 
+000000000;1234567890;2;Geber P2; 
+000000000;1234567890;3;Geber P3; 
+000000000;1234567890;54;P4; 
+000000000;2222222222;0;TESTsensor;
+000000000;2222222222;1;signal A;
+000000000;2222222222;2;signal B;V
+
+Definition ends, becaus the next line is >000000000
+the time is in ms, have you can specify any kind of increment
+But have in mind the lua loop program reads stuff only every ~25ms
+take a look at the spi soecification
+000000001;2222222222;1;4;3;0015;2;1;1;581
+-- bla bla here you can write notes
+000000001;1234567890;1;1;0;60;2;1;0;50;3;1;0;50;54;1;3;1000; 
+
+first is time can start almost at any time 
+the internal handling is a (signed?) 32 bit integer
+follwing rows can have the same or higher time
+time jumps higher 4000ms +/- 30ms sampling time will cause an invalid sensor signal
+exception for inputs have no timelimit
+;
+device ID must be defined otherwise the Player may crash
+;
+now comes a block of 4 values, these blocks can be repeated 
+- 1 Parameter must be defined otherwise the Player may crash
+- 2 Type as specified in the JETI API
+- 3 Decimals like specified in the JETI API 
+- 4 Value
+Inputs 0-50;Type=1; Decimal=0;Value=0-100 => output to -1 to 1 
+Inputs >50;Type=1;Decimals=0..5;Value +- ABS(value)div10**Decimals<=1 
+=> means Decimals=3 max value 1000 => range -1000 to 1000
+
+000000001;2222222222;1;4;3;1016;2;1;1;581
+000001001;1234567890;1;1;0;80;2;1;0;49;3;1;0;51;54;1;3;600; 
+000002001;2222222222;1;4;3;2017;2;1;1;581
+000002001;1234567890;1;1;0;50;2;1;0;48;3;1;0;52;54;1;3;-200; 
+-- here you have a sensor lost signal, because time gap >4000
+000007001;2222222222;1;4;3;7030;2;1;1;581
+000007001;1234567890;1;1;0;50;2;1;0;47;3;1;0;53;54;1;3;-1000;
+000008001;2222222222;1;4;3;8030;2;1;1;581
+000008001;1234567890;1;1;0;40;2;1;0;46;3;1;0;54;54;1;3;-800;
+000009347;2222222222;1;4;3;9330;2;1;1;581
+000009456;1234567890;1;1;0;50;2;1;0;45;3;1;0;55;54;1;3;10;
+
+- good luck ;-))
