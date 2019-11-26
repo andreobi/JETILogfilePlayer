@@ -76,6 +76,8 @@ Licence:
 		- a comment line has to start with non number character
 		- display name changed
 		- init simplified
+		0.48
+		- valid return corrected: preset valid=false deleted
 ]]
 local appName="Log File Player"
 
@@ -271,7 +273,7 @@ local function doParameter(fullData,id,param)
     if key=="value" then
       svalue=value			-- handle value later according spec
     elseif key=="logTime" then
-      if ((sensors[id][param]["logTime"]-logStartTime)+4000 >= system.getTimeCounter()-systemStartTime) then
+      if (sensors[id][param]["logTime"]-logStartTime)+4000 >= system.getTimeCounter()-systemStartTime then
         s["valid"]=true
       else
         s["valid"]=false
@@ -336,7 +338,7 @@ system.getSensors=function(...)
 	  index=i
 	end
   end
-  
+
   if sensors then				-- anything read from the log file
     for id,sensor in pairs(sensors) do
 	  if not (sensor[0]["label"]:sub(1,2)=="Tx" or sensor[0]["label"]:sub(1,2)=="Rx") then
@@ -478,8 +480,7 @@ local function logPlayer()
 		  end
           newSensors[sid][sparam]["label"]=slabel
           newSensors[sid][sparam]["unit"]=sunit
-          newSensors[sid][sparam]["logTime"]=0		-- time
-		  newSensors[sid][sparam]["valid"]=false	-- sofar nothing "received"
+          newSensors[sid][sparam]["logTime"]=0		-- time => valid
           newSensors[sid][sparam]["value"]	=0		-- value
 -- check for sensor type definition in previous sensors definition
           if not pcall(function()
@@ -534,7 +535,7 @@ local function logPlayer()
     if file==nil then						-- file finished
 	  return
 	end
-    if logStartTime==0 then					-- sync logtime with systentime
+    if logStartTime==0 then					-- sync logtime with systemtime
       systemStartTime = system.getTimeCounter()
       logStartTime=logTime
 	end
@@ -741,4 +742,4 @@ local function init(code)
   end
 end
 
-return { init=init, loop=loop, author="Andre", version="0.47",name=appName}
+return { init=init, loop=loop, author="Andre", version="0.48",name=appName}
