@@ -37,10 +37,16 @@ Usage
 Demo
 Install the default.log file in the emulator ../Log dir.
 Istall the LPTest.lua in the ../App folder
-Start the Player with the control switch
+Start the Player with the control switch.
 When everything went well you should see:
 LP: Test Sensor
 LP: initillised
 LP: playing
 signal A = 1.016  (min: 0.015, max: 1.016)
 ...
+
+Please select the player's Telemetry window to see some basic information: status, playtime, file ...
+
+The SwPoMoni Program is a simple montior to show some input values frome the player in a Telemetry window.
+
+The print monitor (separate directory) is an additional debug tool, to visualize some internal values of your program.
