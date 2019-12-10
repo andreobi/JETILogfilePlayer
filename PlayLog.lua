@@ -78,7 +78,24 @@ Licence:
 		- init simplified
 		0.48
 		- valid return corrected: preset valid=false deleted
+		0.49
+		- added playTime, errorParse and state as variable
+		- added Telemetry Window to show basic info: file, model, state and playtime 
+		- clean up and code sorted
+		- prepared for global data structure: globLogFilePlay
 ]]
+-- limited good idea to make variables global, 
+-- an alternative would be to overwrite the FILE functions with <some> managemet overhead
+--[[
+globLogFilePlay={}
+globLogFilePlay.file=""		-- log file name string 12 Bytes
+globLogFilePlay.model=""	-- detected model name 10 Bytes
+globLogFilePlay.status=""	-- LP status init,play,stop,fini 4Bytes
+globLogFilePlay.playT=0		-- current play time in ms
+globLogFilePlay.error=false	-- log file parsing status boolean, more details are provide in the debug window
+--
+]]
+----
 local appName="Log File Player"
 
 local logPath="Log/"
@@ -93,12 +110,13 @@ local system_getSensorValueByID=system.getSensorValueByID
 
 local swReset		-- switchItem to start or reset logPlayer
 
-local lpReset		-- log file player status
+local state			-- log file player status
+local lpReset
 local lpRun		
 local lpEnd
 local lpNewFile		-- newFile selected
 
-local modell		-- log file read values
+local model			-- log file read values
 local sensors		-- sensors[sid][sparam]{["label"],["unit"],["logTime"],["type"],["decimals"],["value"],["min"],["max"]}
 local newSensors	-- definition from the previous run
 local logTime	 	-- time of the line
@@ -107,19 +125,33 @@ local sparam		-- Sensor Value ID
 local slabel		-- Sensor Name
 local sunit 		-- Senseor Unit
 
-local logStartTime
-local systemStartTime
+local logStartTime	-- log file time offset
+local systemStartTime -- system time offset
+local playTime		-- systemTime-systemStartTime
 
 local tx			-- lookup table for input values
 local rx			-- sensor id for txTel
 
 local errorList		-- [...]{etime, etype, evalue}
+local errorParse
 
 local file			-- log file pointer
 local line			-- log file line 
 local sPos			-- sub-string start position 
 local ePos			-- sub-string end position
 
+--------------------------------------------------------------------
+-- print status and error message
+--------------------------------------------------------------------
+local function printStatus(status)
+-- return		-- don't want any prints on the debug window enable return
+  if errorList then
+    for entry, eList in pairs(errorList) do
+      print("Error- "..entry..": "..errorList[entry].etime.." - "..errorList[entry].etype.." . "..errorList[entry].evalue)
+    end
+  end
+  print(status)
+end
 
 --------------------------------------------------------------------
 -- helper function
@@ -165,6 +197,7 @@ system.getTxTelemetry=function(...)
         errorList["getTxTelemetry"]["etime"]=logTime
 	    errorList["getTxTelemetry"]["etype"]="getTxTelemetry"
         errorList["getTxTelemetry"]["evalue"]="unkown value"
+		errorParse=true
 	  end
     end
   end
@@ -196,6 +229,7 @@ system.getInputs=function(...)
         errorList["getInputs"]["etime"]=logTime
         errorList["getInputs"]["etype"]="getInputs"
         errorList["getInputs"]["evalue"]="unkown value"
+		errorParse=true
       end
     end
   end
@@ -238,6 +272,7 @@ system.getInputsVal=function(...)
         errorList["getInputsVal"]["etime"]=logTime
         errorList["getInputsVal"]["etype"]="getInputsVal"
         errorList["getInputsVal"]["evalue"]="unkown value"
+		errorParse=true
       end
     end
   end
@@ -409,6 +444,7 @@ local function logPlayer()
 
   if lpReset  then							-- read log from scretch
 	errorList={}							-- reset error list
+	errorParse=false
 	if file then							-- handle file init
 	  io.close(file)
 	end
@@ -419,15 +455,17 @@ local function logPlayer()
 	    errorList["playerInit"]["etime"]=0
 	    errorList["playerInit"]["etype"]="File error"
 	    errorList["playerInit"]["evalue"]=logPath..logFile
+		errorParse=true
 	  end
       return
     end
 
 	newSensors={}							-- reset sensor table
-	logStartTime=0
-	logTime=0
 	tx={}	
 	rx={}
+	logStartTime=0							-- reset time values
+	logTime=0
+	playTime=0
 	
     repeat									-- register sensors
       line = io.readline(file)
@@ -439,18 +477,20 @@ local function logPlayer()
 	      errorList["playerInit"]["etime"]=0
 	      errorList["playerInit"]["etype"]="File no data"
 	      errorList["playerInit"]["evalue"]=logPath..logFile
+		  errorParse=true
 	    end
 	    return								-- eof and now?
       end
-      if 1==line:find("#") then				-- modell name
-        modell=line:sub(3)
-		if modell then
-		  print("LP: "..modell)
+      if 1==line:find("#") then				-- model name
+        model=line:sub(3)
+		if model~=nil then
+          printStatus("LP: "..model)
 		end
       else
         ePos=0								-- new line
         logTime=tonumber(findPos())
 		if logTime==nil then
+		  logTime=0
           io.close(file)
           file=nil
           if errorList["playerInit"]==nil then
@@ -458,11 +498,12 @@ local function logPlayer()
 	        errorList["playerInit"]["etime"]=0
 	        errorList["playerInit"]["etype"]="File no logtime"
             errorList["playerInit"]["evalue"]=logPath..logFile
+			errorParse=true
           end
 	      return								-- eof and now?
 		end
         sid=(findPos())
-        if logTime==0 then					-- sensor def
+        if logTime==0 then						-- sensor def
           sparam=tonumber(findPos())
           slabel=findPos()	
           sunit=findPos()
@@ -472,6 +513,12 @@ local function logPlayer()
           end
           if newSensors[sid][sparam]==nil then
             newSensors[sid][sparam]={}			--create sensor Parameter
+          elseif errorList["InputControl"]==nil then
+            errorList["InputControl"]={}
+            errorList["InputControl"]["etime"]="0"
+            errorList["InputControl"]["etype"]="redefinition Parameter"
+            errorList["InputControl"]["evalue"]=sid..':'..sparam
+			errorParse=true
           end
 		  if sparam==0 and slabel:sub(1,2)=="Tx" then
 		    tx["TxId"]=sid
@@ -505,6 +552,7 @@ local function logPlayer()
 	            errorList["InputControl"]["etime"]="0;"..tx["TxId"]..';'..param
 	            errorList["InputControl"]["etype"]="redefinition Input Control"
 	            errorList["InputControl"]["evalue"]=senPar["label"]
+				errorParse=true
 	          end
 			else
               tx[senPar["label"]]=param
@@ -520,6 +568,7 @@ local function logPlayer()
 		            errorList["InputControl"]["etime"]="0;"..tx["TxId"]..';'..param
 		            errorList["InputControl"]["etype"]="redefinition Input Control"
 		            errorList["InputControl"]["evalue"]=sw
+					errorParse=true
 		          end
 				else
 	              tx[sw]=param
@@ -535,11 +584,12 @@ local function logPlayer()
     if file==nil then						-- file finished
 	  return
 	end
-    if logStartTime==0 then					-- sync logtime with systemtime
-      systemStartTime = system.getTimeCounter()
+    if logStartTime==0 then					-- set offset time values to sync logtime with systemtime
       logStartTime=logTime
+      systemStartTime=system.getTimeCounter()
 	end
-    while logTime-logStartTime <= system.getTimeCounter()-systemStartTime do -- read log file data
+    playTime=system.getTimeCounter()-systemStartTime
+    while logTime-logStartTime <= playTime do -- read log file data
       if sid=="0000000000" then				-- sensor value for undefind sensor
 --print ("ALARM")
       elseif sensors[sid]==nil then
@@ -548,6 +598,7 @@ local function logPlayer()
 		  errorList["playerRun"]["etime"]=logTime
 		  errorList["playerRun"]["etype"]="unknown ID"
 		  errorList["playerRun"]["evalue"]=sid
+		  errorParse=true
 		end
       else
         while ePos>0 do
@@ -561,6 +612,7 @@ local function logPlayer()
 		      errorList["playerRun"]["etime"]=logTime
 		      errorList["playerRun"]["etype"]="unknown Parameter"
 		      errorList["playerRun"]["evalue"]=sparam
+			  errorParse=true
 		    end
             break
           else														-- store parameter set
@@ -590,6 +642,7 @@ local function logPlayer()
       repeat
         line = io.readline(file)
         if line==nil then
+		  logTime=0
           io.close(file)
           file=nil
 	      return							-- eof - done
@@ -597,7 +650,8 @@ local function logPlayer()
         ePos=0
         logTime= tonumber(findPos())
         sid=(findPos())
-	  until logTime~=nil 					-- jump over empty lines or comment lines starting with --
+	  until logTime~=nil 					-- jump over empty lines or comment lines
+      playTime=system.getTimeCounter()-systemStartTime
     end										-- eotime - return
   elseif lpEnd then							-- finished
 	if file then							-- close file if not already done
@@ -614,6 +668,7 @@ local function logPlayer()
       errorList["playerState"]["etime"]=logTime
       errorList["playerState"]["etype"]="Player State Mashine"
       errorList["playerState"]["evalue"]="unknown State"
+	  errorParse=true
     end
   end
 end
@@ -665,26 +720,39 @@ local function initForm()
   form.addRow(2)							-- select Reset switch
   form.addLabel({label="Player Reset"})
   form.addInputbox(swReset,true,swResetChanged)
-
 end
 
---------------------------------------------------------------------
--- print status
---------------------------------------------------------------------
-local function printStatus(status)
-  if errorList then
-    for entry, eList in pairs(errorList) do
-      print("Error- "..entry..": "..errorList[entry].etime.." - "..errorList[entry].etype.." . "..errorList[entry].evalue)
-    end
+--------------------------------------------------------------------------------
+-- draw Telemetry Window
+--------------------------------------------------------------------------------
+local function displayValues(width, height)
+  lcd.drawText(2,1,state)
+  if errorParse then
+    lcd.drawText(40,1,"parse",FONT_MINI)
+    lcd.drawText(40,11,"error",FONT_MINI)
+  else
+-- i.e next logfile time could be placed here
+    lcd.drawText(38,6,string.format("%08.3f",((logTime-logStartTime)/1000)),FONT_MINI)
   end
-  print(status)
+  lcd.drawText(93,1,string.format("%07.1f",(playTime/1000)))
+end
+
+--------------------------------------------------------------------------------
+-- register / rewrite Telemetrie window
+--------------------------------------------------------------------------------
+local function registerTeleDisplay()
+  local strF=logFile:sub(1,12)
+  strF=strF..string.rep(" ",(12-strF:len()))
+  local strM=model:sub(1,10)
+  strM=strM..string.rep(" ",(10-strM:len()))
+  system.registerTelemetry(1,string.format("LP: %s  %s",strF,strM),1,displayValues)
 end
 
 --------------------------------------------------------------------
--- Runtime functions
+-- Runtime function
 --------------------------------------------------------------------
 local function loop()
-  if swReset~=nil then							-- handling & log file defined?
+  if swReset~=nil then						-- control switch defined?
     local valReset = system_getInputsVal(swReset)
     if valReset>0 then						-- Restart log file?
       if lpRun then
@@ -692,6 +760,7 @@ local function loop()
 		lpEnd=true
 		logPlayer()	
         printStatus("LP: stopped")
+		state="stop"
 	  end
 	  if ((valReset>0 and lpNewFile) or not lpReset) and logFile then
         lpReset=true
@@ -700,22 +769,35 @@ local function loop()
 		lpNewFile=false
 		logPlayer()							-- read log file until log time starts
         printStatus("LP: initillised")
+		state="init"
+        registerTeleDisplay()				-- rewrite Telemetry window name
 	  end
 	else									-- play file
       if lpReset and not lpRun then
-        printStatus("LP: playing")
         lpRun=true
         lpReset=false
+        printStatus("LP: playing")
+		state="play"
       end
 	  if lpRun then
         logPlayer()							-- read log file until log time offset >= passed system time diff
         if file==nil and not lpEnd then		-- all done: reached end of file
-          printStatus("LP: finished")
           lpEnd=true
 		  lpRun=false
+          printStatus("LP: finished")
+		  state="fini"
         end
       end
 	end
+--[[
+-- set globals 
+    globLogFilePlay.file=logFile:sub(1,12)
+    globLogFilePlay.model=model:sub(1,10)
+    globLogFilePlay.status=state
+    globLogFilePlay.playT=playTime
+    globLogFilePlay.error=errorParse
+--
+]]
   end
 end
 
@@ -729,17 +811,24 @@ local function init(code)
     swReset = system.pLoad("swReset")			-- read old configuration
     logFile= system.pLoad("logFile",logFile)
 
+	model=""									-- preset Telemetry window
+    registerTeleDisplay()
+
     lpReset=false								-- state machine
     lpRun=false
 	lpEnd=false
 	lpNewFile=false
     sensors={}
 	errorList={}								-- reset Error list
+	errorParse=false
 	systemStartTime=0							-- set player time
 	logStartTime=0
+	logTime=0
+	playTime=0
+	state="wait"
   else
     print ("Emulator usage ONLY!!!")
   end
 end
 
-return { init=init, loop=loop, author="Andre", version="0.48",name=appName}
+return {init=init, loop=loop, author="Andre", version="0.49",name=appName}
