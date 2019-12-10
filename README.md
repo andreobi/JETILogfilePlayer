@@ -34,7 +34,7 @@ Usage
   - system.getInputs (...)
   - system.getTxTelemetry ()
 
-Demo
+Demonstration:
 Install the default.log file in the emulator ../Log dir.
 Istall the LPTest.lua in the ../App folder
 Start the Player with the control switch.
