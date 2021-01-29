@@ -83,6 +83,12 @@ Licence:
 		- added Telemetry Window to show basic info: file, model, state and playtime 
 		- clean up and code sorted
 		- prepared for global data structure: globLogFilePlay
+		0.52
+		- check errorParse to avoid "nil" print
+		- sensor.valid handling changed
+		- system.getSensors returns now a sorted table to be more like jeti
+		- sensorName is now reintoduced
+		- default control button is now SA
 ]]
 -- limited good idea to make variables global, 
 -- an alternative would be to overwrite the FILE functions with <some> managemet overhead
@@ -145,7 +151,7 @@ local ePos			-- sub-string end position
 --------------------------------------------------------------------
 local function printStatus(status)
 -- return		-- don't want any prints on the debug window enable return
-  if errorList then
+  if errorParse then
     for entry, eList in pairs(errorList) do
       print("Error- "..entry..": "..errorList[entry].etime.." - "..errorList[entry].etype.." . "..errorList[entry].evalue)
     end
@@ -297,10 +303,11 @@ local function doParameter(fullData,id,param)
   if fullData then
     s["id"]=id				-- sensors unique identifier
     s["param"]=param		-- parameter identifier
---  if param~=0 then
---    s["sensorName"]= sensors[id][0]["label"]
---  end
-    s["sensorName"]=""
+    if param~=0 then
+      s["sensorName"]= sensors[id][0]["label"]
+	else
+      s["sensorName"]= ""	
+    end
   end
 
   local svalue
@@ -322,6 +329,12 @@ local function doParameter(fullData,id,param)
 
 -- handle value
   if svalue then
+    if (sensors[id][param]["logTime"]-logStartTime)+4000 >= system.getTimeCounter()-systemStartTime then
+      s["valid"]=true
+    else
+      s["valid"]=false
+    end
+
     if s["type"]==5 then
       if sensors[id][param]["decimals"]==0 then				-- time
         s["valSec"]=sensors[id][param]["value"]&0xFF
@@ -377,12 +390,15 @@ system.getSensors=function(...)
   if sensors then				-- anything read from the log file
     for id,sensor in pairs(sensors) do
 	  if not (sensor[0]["label"]:sub(1,2)=="Tx" or sensor[0]["label"]:sub(1,2)=="Rx") then
-        for param,senPar in pairs(sensor) do
+		local sl={}
+        for n,param in pairs(sensor) do table.insert(sl,n) end
+		table.sort(sl)
+		for i,sp in ipairs(sl) do
 	      index=index+1
           if sa[index]==nil then
             sa[index]={}
           end
-          sa[index]=doParameter(true,id,param) -- add sensor subset to array
+          sa[index]=doParameter(true,id,sp) -- add sensor subset to array
         end
       end
     end
@@ -540,6 +556,7 @@ local function logPlayer()
 		end
       end
     until logTime>0							-- read defenition done
+
     sensors=newSensors;
 
 	if tx["TxId"] then						-- create tx input, param table
@@ -808,7 +825,7 @@ local function init(code)
   local deviceName,deviceType=system.getDeviceType ()
   if deviceType==1 then
     system.registerForm(1,MENU_APPS,appName,initForm)
-    swReset = system.pLoad("swReset")			-- read old configuration
+    swReset = system.pLoad("swReset",system.createSwitch("SA", "S",1))	-- read old configuration
     logFile= system.pLoad("logFile",logFile)
 
 	model=""									-- preset Telemetry window
@@ -831,4 +848,4 @@ local function init(code)
   end
 end
 
-return {init=init, loop=loop, author="Andre", version="0.49",name=appName}
+return {init=init, loop=loop, author="Andre", version="0.52",name=appName}
