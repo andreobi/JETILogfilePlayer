@@ -11,7 +11,7 @@ The application should never be used on a real device to to avoid any unpredicta
 Description
 
 The application is a development tool to test lua applications with previous recorded log file data. 
-The logfile plyer is the missing tool to bring previous recorded sensor data into the jeti emulator. 
+The logfile player is the missing tool to bring previous recorded sensor data into the jeti emulator. 
 i.e. if you have a logfile with a recorded GPS track and a lua GPS app, simply install the both app 
 on the emulator. After configuring te logfile player and selecting the logfile, with Switch A (default) 
 you start the log playback. As long as the logfile has data, your app will retrieve the sensor and 
