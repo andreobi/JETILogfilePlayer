@@ -10,8 +10,16 @@ The application should never be used on a real device to to avoid any unpredicta
 
 Description
 
-The application is a development tool to test lua applications with previous recorded log file data.
-Instead of using a real logfile you can build your own test case file to simulate your test-app.
+The application is a development tool to test lua applications with previous recorded log file data. 
+The logfile plyer is the missing tool to bring previous recorded sensor data into the jeti emulator. 
+i.e. if you have a logfile with a recorded GPS track and a lua GPS app, simply install the both app 
+on the emulator. After configuring te logfile player and selecting the logfile you can start with a 
+switch (defalut A) the log. As long as the logfile has data your app will retrieve the sensor and 
+some switchItem data from the log. Afterwards the data will become invalid. If you want to test again
+then you have to restart the player with the switch.
+
+Aso you can create your own testfile instead of using a real logfile. Build your own test case to stimulate your new app with predefind data.
+
 A free selectable switch can control the player. The control switch is always taken from the emulator.
 The player has four states: 
  - initialiesed
