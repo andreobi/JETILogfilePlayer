@@ -89,6 +89,8 @@ Licence:
 		- system.getSensors returns now a sorted table to be more like jeti
 		- sensorName is now reintoduced
 		- default control button is now SA
+		0.53
+		- system.getTxTelemetry.RSSI converter
 ]]
 -- limited good idea to make variables global, 
 -- an alternative would be to overwrite the FILE functions with <some> managemet overhead
@@ -146,6 +148,8 @@ local line			-- log file line
 local sPos			-- sub-string start position 
 local ePos			-- sub-string end position
 
+local rssiConvert = {1, 3, 6, 9, 12, 16, 20, 25, 31, 45}
+
 --------------------------------------------------------------------
 -- print status and error message
 --------------------------------------------------------------------
@@ -191,9 +195,13 @@ system.getTxTelemetry=function(...)
           elseif sensors[rx["RxId"]][param]["label"] == "Q" then
             txTel.rx1Percent=sensors[rx["RxId"]][param]["value"]/getDivisor(rx["RxId"],param)
           elseif sensors[rx["RxId"]][param]["label"] == "A1" then
-            txTel.RSSI[1]=sensors[rx["RxId"]][param]["value"]/getDivisor(rx["RxId"],param)
+			local p = (sensors[rx["RxId"]][param]["value"]/getDivisor(rx["RxId"],param))
+			p = math.max(0,math.min(p,9)) +1
+            txTel.RSSI[1]= rssiConvert[p] 
           elseif sensors[rx["RxId"]][param]["label"] == "A2" then
-            txTel.RSSI[2]=sensors[rx["RxId"]][param]["value"]/getDivisor(rx["RxId"],param)
+			local p = (sensors[rx["RxId"]][param]["value"]/getDivisor(rx["RxId"],param))
+			p = math.max(0,math.min(p,9)) +1
+            txTel.RSSI[2]= rssiConvert[p] 
           end
         end
       end
@@ -848,4 +856,4 @@ local function init(code)
   end
 end
 
-return {init=init, loop=loop, author="Andre", version="0.52",name=appName}
+return {init=init, loop=loop, author="Andre", version="0.53",name=appName}
